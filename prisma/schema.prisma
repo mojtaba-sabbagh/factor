@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  superadmin
+}
+
+enum DocType {
+  invoice
+  proforma
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  profile      Profile?
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Company {
+  id               String    @id @default(uuid())
+  name             String    @default("")
+  active           Boolean   @default(true)
+  settings         Json      @default("{}")
+  invoiceCounters  Json      @default("{}") @map("invoice_counters")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  profiles         Profile[]
+  invoices         Invoice[]
+
+  @@map("companies")
+}
+
+model Profile {
+  userId    String   @id @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String
+  role      Role     @default(user)
+  companyId String?  @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@map("profiles")
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type          DocType
+  number        String   @default("")
+  date          String   @default("")
+  dueDate       String?  @map("due_date")
+  validUntil    String?  @map("valid_until")
+  customer      Json     @default("{}")
+  items         Json     @default("[]")
+  extraDiscount Decimal  @default(0) @map("extra_discount")
+  taxPercent    Decimal  @default(0) @map("tax_percent")
+  notes         String   @default("")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("invoices")
+}

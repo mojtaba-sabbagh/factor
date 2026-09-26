@@ -1,0 +1,301 @@
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --danger: #dc2626;
+  --border: #e2e8f0;
+  --bg: #f8fafc;
+  --text: #1e293b;
+  --muted: #64748b;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Vazirmatn", Tahoma, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+button, input, select, textarea {
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+ 
+  font-size: 14px;
+}
+
+/* App shell */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px;
+  background: #fff;
+  border-inline-start: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.sidebar-brand { display: flex; align-items: center; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.sidebar-brand img { width: 32px; height: 32px; flex: 0 0 32px; object-fit: contain; }
+.sidebar-brand-text { font-weight: 700; }
+.nav-list { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.nav-item, .nav-item-button {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; color: var(--text); text-decoration: none;
+  background: none; border: none; font-size: 14px; cursor: pointer; text-align: right; width: 100%;
+}
+.nav-item:hover, .nav-item-button:hover { background: var(--bg); }
+.nav-item.active { background: #eff6ff; color: var(--primary); font-weight: 600; }
+.sidebar-footer { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.sidebar-user { font-size: 12px; color: var(--muted); padding: 6px 12px; }
+.main-area { flex: 1; padding: 24px; max-width: 1100px; }
+
+/* Cards / buttons / alerts */
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+.card-pad { padding: 24px; }
+.auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.auth-card { width: 380px; }
+.page-title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+.page-subtitle { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; font-size: 14px; cursor: pointer; font-weight: 600; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-outline { background: #fff; border-color: var(--border); color: var(--text); }
+.btn-danger { background: #fee2e2; color: var(--danger); }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.alert { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.alert-error { background: #fee2e2; color: var(--danger); }
+.empty-state { padding: 40px; text-align: center; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 13px; color: var(--muted); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+
+/* Tables */
+.table, .items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .items-table th { background: var(--bg); text-align: right; padding: 8px; border-bottom: 1px solid var(--border); }
+.table td, .items-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.items-table { table-layout: fixed; }
+.items-table input { display: block; width: 100%; min-width: 0; }
+.items-table input[type="number"] { direction: ltr; text-align: left; }
+.financial-number { direction: ltr; text-align: left; }
+
+/* Jalali date picker */
+.jdp-root { position: relative; }
+.jdp-input-wrap { display: flex; }
+.jdp-input-wrap input { flex: 1; }
+.jdp-toggle { border: 1px solid var(--border); border-inline-start: none; border-radius: 0 6px 6px 0; background: #fff; cursor: pointer; }
+.jdp-popup { position: absolute; z-index: 20; top: calc(100% + 4px); background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px; width: 260px; }
+.jdp-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.jdp-nav { border: none; background: none; font-size: 18px; cursor: pointer; }
+.jdp-weekdays, .jdp-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.jdp-weekday { font-size: 11px; color: var(--muted); padding: 4px 0; }
+.jdp-day { border: none; background: none; padding: 6px 0; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.jdp-day:hover { background: var(--bg); }
+.jdp-day-selected { background: var(--primary); color: #fff; }
+.jdp-day-empty { visibility: hidden; }
+.jdp-footer { display: flex; justify-content: space-between; margin-top: 6px; }
+.jdp-link { border: none; background: none; color: var(--primary); font-size: 12px; cursor: pointer; }
+
+/* Invoice document / print */
+.doc-page {
+  background: #fff;
+  width: var(--page-width-mm, 210mm);
+  min-height: var(--page-height-mm, 297mm);
+  margin: 0 auto 24px;
+  padding: var(--page-padding, 14mm);
+  box-shadow: 0 0 0 1px var(--border);
+  font-size: 13px;
+}
+.doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+/* In letterhead mode this badge is the first thing inside the scaled content area
+   (not the letterhead artwork itself) — push it down to clear the header artwork
+   instead of sitting flush against the top of the page. Tune this to match how
+   tall your letterhead's header zone actually is. */
+.doc-header-letterhead {
+  margin-top: var(--letterhead-header-offset, 39mm);
+  margin-bottom: var(--letterhead-header-gap, 12px);
+}
+.doc-brand { display: flex; gap: 10px; }
+.doc-brand img { width: 56px; height: 56px; object-fit: contain; }
+.doc-brand-name { font-weight: 700; }
+.doc-brand-address, .doc-brand-reg { font-size: 11px; color: var(--muted); }
+.doc-type { font-size: 16px; font-weight: 700; border: 1px solid var(--border); padding: 6px 14px; border-radius: 6px; }
+.doc-meta { display: flex; gap: 12px; margin-bottom: 12px; }
+.doc-meta-box { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.doc-meta-box .row { display: flex; justify-content: space-between; padding: 3px 0; }
+.doc-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+.doc-table th, .doc-table td { border: 1px solid var(--border); padding: 6px 8px; font-size: 12px; }
+.doc-table th { background: var(--bg); }
+.doc-totals { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.doc-totals table { border-collapse: collapse; min-width: 280px; }
+.doc-totals td { padding: 4px 8px; font-size: 12px; }
+.doc-totals .label { color: var(--muted); }
+.doc-totals .grand td { font-weight: 700; border-top: 1px solid var(--border); padding-top: 6px; }
+.doc-words, .doc-payment, .doc-notes { font-size: 12px; margin-bottom: 8px; }
+.doc-signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+.sign-box { width: 45%; text-align: center; border-top: 1px dashed var(--border); padding-top: 8px; font-size: 12px; }
+.sign-signature, .sign-seal { max-height: 50px; margin-top: 6px; }
+/* The CEO name and signature share the same space: a transparent signature image
+   sits over the printed name instead of increasing the signature block's height. */
+.sign-nameblock {
+  display: grid;
+  place-items: center;
+  position: relative;
+  min-height: 50px;
+  margin-top: 6px;
+}
+.sign-nameblock > * { grid-area: 1 / 1; }
+.sign-name {
+  z-index: 1;
+  align-self: end;
+  padding: 0 6px 2px;
+  font-weight: 600;
+}
+.sign-nameblock .sign-signature {
+  z-index: 2;
+  max-width: 100%;
+  margin: 0;
+  object-fit: contain;
+}
+.doc-footer { text-align: center; font-size: 10px; color: var(--muted); margin-top: 16px; }
+.doc-scale-outer { overflow: hidden; position: relative; z-index: 1; }
+
+/* Letterhead */
+.lh { position: relative; }
+.lh-ghost { visibility: hidden; }
+.lh-bismillah { height: 22px; }
+
+/* A custom/uploaded letterhead is a full-page background image behind the invoice
+   content, not an inline element — without this it renders at its raw pixel size
+   (huge, since PDF-derived letterheads are rasterized at ~300 DPI) and blows out
+   the page across several near-blank printed pages. */
+.doc-page-letterhead {
+  position: relative;
+  height: var(--page-height-mm, 297mm);
+  overflow: hidden; /* safety net: nothing should ever spill past one physical page */
+}
+.doc-page-letterhead > .lh {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.lh-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.lh-image .lh-custom {
+  width: 100%;
+  height: 100%;
+  /* Letterheads are prepared to the selected paper ratio. Filling the page keeps
+     registration marks and footer artwork aligned; `cover` can crop an A5 upload. */
+  object-fit: fill;
+  display: block;
+}
+.lh-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+.lh-ref { display: flex; gap: 4px; }
+.lh-ref-label { color: var(--muted); }
+/* Pins the date/invoice-number block to the top-left corner of the header, above
+   the letterhead artwork, whether the letterhead is the generated template or a
+   custom uploaded image. "left" is literal here (not RTL logical start), matching
+   the requested physical corner. */
+.lh-refs-corner {
+  position: absolute;
+  top: 8mm;
+  left: 8mm;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+/* Custom-letterhead only: the label is already printed on the image, so this is
+   just the value, dropped onto the existing blank line. These two positions are
+   a starting guess — adjust top/left (in mm) for each until it lands exactly on
+   your letterhead's blank date/number lines; every letterhead design differs. */
+.lh-image .lh-ref-value {
+  position: absolute;
+  /* Percentage coordinates retain their place when an A4 design is supplied as
+     a matching A5 design (both paper sizes have the same aspect ratio). */
+  left: 9.52%;
+  font-weight: 700;
+  font-size: 12px;
+  z-index: 1;
+}
+.lh-image .lh-ref-value-date { top: 7.41%; }
+.lh-image .lh-ref-value-number { top: 9.76%; }
+/* The generated (non-image) letterhead's footer band pins to the bottom of the
+   page instead of flowing immediately after the header. */
+.lh-footer {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+}
+
+/* Generated letterhead artwork. All geometry is proportional to the sheet so
+   the same design remains correctly composed on A4 and A5. */
+.lh {
+  color: #1e293b;
+  font-size: 11px;
+}
+.lh-header { position: absolute; inset: 0 0 auto; height: 16%; }
+.lh-topbar { height: 11%; background: #1d4ed8; }
+.lh-stripes { height: 6%; background: repeating-linear-gradient(-45deg, #60a5fa 0 5px, #dbeafe 5px 10px); }
+.lh-bismillah { display: block; height: 15%; margin: 3% auto 0; object-fit: contain; }
+.lh-brand { position: absolute; top: 37%; right: 6%; display: flex; align-items: center; gap: 8px; }
+.lh-logo { width: 22mm; height: 22mm; object-fit: contain; }
+.lh-ids { line-height: 1.65; }
+.lh-type { font-weight: 700; font-size: 1.1em; }
+.lh-rule { position: absolute; inset-inline: 6%; bottom: 0; border-bottom: 1px solid #93c5fd; }
+.lh-footer { height: 10%; text-align: center; background: #f8fbff; }
+.lh-rule-footer { top: 0; bottom: auto; }
+.lh-contact { padding: 8px 8% 0; font-size: 10px; line-height: 1.6; }
+.lh-contact-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 3px 14px; }
+.lh-stripes-bottom { position: absolute; inset-inline: 0; bottom: 11%; height: 13%; }
+.lh-bottombar { position: absolute; inset-inline: 0; bottom: 0; height: 11%; background: #1d4ed8; }
+
+/* A5 is 70.5% of A4. It needs its own working margins and type scale; inheriting
+   the A4 spacing leaves too little room for invoice content and makes the header
+   appear far too low on the page. */
+.doc-page.size-a5 {
+  --page-padding: 8mm;
+  --letterhead-header-offset: 28mm;
+  --letterhead-header-gap: 7px;
+  font-size: 11px;
+}
+.size-a5 .doc-type { font-size: 13px; padding: 4px 9px; }
+.size-a5 .doc-meta { gap: 7px; margin-bottom: 7px; }
+.size-a5 .doc-meta-box { border-radius: 5px; padding: 5px 7px; }
+.size-a5 .doc-meta-box .row { padding: 2px 0; font-size: 10px; }
+.size-a5 .doc-table { margin-bottom: 7px; }
+.size-a5 .doc-table th,
+.size-a5 .doc-table td { padding: 3px 2px; font-size: 9px; }
+.size-a5 .doc-totals { margin-bottom: 6px; }
+.size-a5 .doc-totals table { min-width: 205px; }
+.size-a5 .doc-totals td,
+.size-a5 .doc-words,
+.size-a5 .doc-payment,
+.size-a5 .doc-notes { font-size: 10px; }
+.size-a5 .doc-signatures { margin-top: 17px; }
+.size-a5 .sign-box { padding-top: 5px; font-size: 10px; }
+.size-a5 .sign-signature,
+.size-a5 .sign-seal { max-height: 36px; }
+.size-a5 .sign-nameblock { min-height: 36px; margin-top: 3px; }
+.size-a5 .lh { font-size: 8px; }
+.size-a5 .lh-logo { width: 15mm; height: 15mm; }
+.size-a5 .lh-contact { font-size: 7px; padding-top: 4px; }
+.size-a5 .lh-image .lh-ref-value { font-size: 9px; }
+
+@media print {
+  html, body { background: #fff; }
+  .no-print { display: none !important; }
+  .sidebar { display: none !important; }
+  .app-shell { display: block; min-height: 0; }
+  .main-area { padding: 0 !important; max-width: none !important; }
+  .doc-page { box-shadow: none; margin: 0; break-after: page; page-break-after: always; }
+}
