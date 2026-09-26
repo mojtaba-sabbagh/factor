@@ -37,6 +37,9 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
 ) {
   const totals = calcTotals(invoice);
   const items = invoice.items || [];
+  // Keep short invoices balanced without adding an arbitrary block of white space.
+  // A4 has room for four item rows; A5 intentionally stays tighter.
+  const blankItemRows = items.length > 0 ? Math.max(0, (size === "a5" ? 2 : 4) - items.length) : 0;
   const customLetterhead = useLetterhead ? getCustomLetterhead(company, size) : null;
   const seal = withSeal ? resolveSeal(company) : null;
   const signature = withSignature ? resolveSignature(company) : null;
@@ -117,6 +120,7 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
       <div className="doc-scale-outer" style={fit.height != null ? { height: fit.height } : undefined}>
         <div
           ref={contentRef}
+          className="doc-content"
           style={
             fit.scale < 1
               ? { width: `${100 / fit.scale}%`, transform: `scale(${fit.scale})`, transformOrigin: "top right" }
@@ -159,7 +163,7 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
                 ) : null}
               </div>
             )}
-            <div className="doc-meta-box">
+            <div className="doc-meta-box doc-customer-meta">
               <div className="row">
                 <span>خریدار / سازمان:</span>
                 <b>{invoice.customer?.name}</b>
@@ -183,7 +187,7 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
                 </div>
               ) : null}
               {invoice.customer?.address ? (
-                <div className="row">
+                <div className="row doc-customer-address">
                   <span>آدرس:</span>
                   <b>{invoice.customer.address}</b>
                 </div>
@@ -222,6 +226,11 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
                   </tr>
                 );
               })}
+              {Array.from({ length: blankItemRows }).map((_, idx) => (
+                <tr className="doc-table-blank-row" aria-hidden="true" key={`blank-item-row-${idx}`}>
+                  <td colSpan={7}>&nbsp;</td>
+                </tr>
+              ))}
               {items.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ color: "#999", padding: "16px" }}>
@@ -232,7 +241,8 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
             </tbody>
           </table>
 
-          <div className="doc-totals">
+          <div className="doc-summary">
+            <div className="doc-totals">
             <table>
               <tbody>
                 <tr>
@@ -265,7 +275,8 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
             </table>
           </div>
 
-          <div className="doc-words">مبلغ به حروف: {amountToWordsWithUnit(totals.grandTotal, "ریال")}</div>
+            <div className="doc-summary-details">
+              <div className="doc-words">مبلغ به حروف: {amountToWordsWithUnit(totals.grandTotal, "ریال")}</div>
 
           {invoice.type === "invoice" && company.iban ? (
             <div className="doc-payment">
@@ -273,7 +284,9 @@ const InvoiceDocument = forwardRef<HTMLDivElement, {
             </div>
           ) : null}
 
-          {invoice.notes ? <div className="doc-notes">توضیحات: {invoice.notes}</div> : null}
+              {invoice.notes ? <div className="doc-notes">توضیحات: {invoice.notes}</div> : null}
+            </div>
+          </div>
 
           <div className="doc-signatures">
             <div className="sign-box">

@@ -120,18 +120,29 @@ button, input, select, textarea {
 .doc-brand-name { font-weight: 700; }
 .doc-brand-address, .doc-brand-reg { font-size: 11px; color: var(--muted); }
 .doc-type { font-size: 16px; font-weight: 700; border: 1px solid var(--border); padding: 6px 14px; border-radius: 6px; }
-.doc-meta { display: flex; gap: 12px; margin-bottom: 12px; }
-.doc-meta-box { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
-.doc-meta-box .row { display: flex; justify-content: space-between; padding: 3px 0; }
-.doc-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-.doc-table th, .doc-table td { border: 1px solid var(--border); padding: 6px 8px; font-size: 12px; }
-.doc-table th { background: var(--bg); }
-.doc-totals { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.doc-meta { display: flex; gap: 10px; margin-bottom: 10px; }
+.doc-meta-box { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+.doc-meta-box .row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.doc-customer-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.doc-customer-address { grid-column: 1 / -1; }
+.doc-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 10px; }
+.doc-table th, .doc-table td { border: 1px solid var(--border); padding: 5px 7px; font-size: 12px; }
+.doc-table th { background: #eff6ff; font-weight: 700; }
+.doc-table .desc { font-weight: 500; }
+.doc-table tbody td:nth-child(1),
+.doc-table tbody td:nth-child(4),
+.doc-table tbody td:nth-child(5),
+.doc-table tbody td:nth-child(6),
+.doc-table tbody td:nth-child(7) { direction: ltr; text-align: left; }
+.doc-table-blank-row td { height: 26px; color: transparent; }
+.doc-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 16px; border-top: 1px solid var(--border); padding-top: 8px; }
+.doc-summary-details { min-width: 0; padding-top: 3px; }
+.doc-totals { display: flex; justify-content: flex-end; margin: 0; }
 .doc-totals table { border-collapse: collapse; min-width: 280px; }
 .doc-totals td { padding: 4px 8px; font-size: 12px; }
 .doc-totals .label { color: var(--muted); }
 .doc-totals .grand td { font-weight: 700; border-top: 1px solid var(--border); padding-top: 6px; }
-.doc-words, .doc-payment, .doc-notes { font-size: 12px; margin-bottom: 8px; }
+.doc-words, .doc-payment, .doc-notes { font-size: 12px; margin-bottom: 6px; line-height: 1.65; }
 .doc-signatures { display: flex; justify-content: space-between; margin-top: 30px; }
 .sign-box { width: 45%; text-align: center; border-top: 1px dashed var(--border); padding-top: 8px; font-size: 12px; }
 .sign-signature, .sign-seal { max-height: 50px; margin-top: 6px; }
@@ -159,6 +170,8 @@ button, input, select, textarea {
 }
 .doc-footer { text-align: center; font-size: 10px; color: var(--muted); margin-top: 16px; }
 .doc-scale-outer { overflow: hidden; position: relative; z-index: 1; }
+.doc-page-letterhead .doc-content { display: flex; flex-direction: column; min-height: 238mm; }
+.doc-page-letterhead .doc-signatures { margin-top: auto; padding-top: 14px; }
 
 /* Letterhead */
 .lh { position: relative; }
@@ -214,6 +227,15 @@ button, input, select, textarea {
   padding: 4px 10px;
   border-radius: 4px;
 }
+/* On pre-printed stationery the header artwork and its labels already exist on
+   paper. Keep only the variable date/number values visible in those positions. */
+.lh-ghost .lh-refs-corner {
+  visibility: visible;
+  background: transparent;
+  padding: 0;
+}
+.lh-ghost .lh-ref-label,
+.lh-ghost .lh-ref:nth-child(3) { visibility: hidden; }
 /* Custom-letterhead only: the label is already printed on the image, so this is
    just the value, dropped onto the existing blank line. These two positions are
    a starting guess — adjust top/left (in mm) for each until it lands exactly on
@@ -271,10 +293,13 @@ button, input, select, textarea {
 .size-a5 .doc-type { font-size: 13px; padding: 4px 9px; }
 .size-a5 .doc-meta { gap: 7px; margin-bottom: 7px; }
 .size-a5 .doc-meta-box { border-radius: 5px; padding: 5px 7px; }
+.size-a5 .doc-customer-meta { column-gap: 8px; }
 .size-a5 .doc-meta-box .row { padding: 2px 0; font-size: 10px; }
 .size-a5 .doc-table { margin-bottom: 7px; }
 .size-a5 .doc-table th,
 .size-a5 .doc-table td { padding: 3px 2px; font-size: 9px; }
+.size-a5 .doc-table-blank-row td { height: 17px; }
+.size-a5 .doc-summary { gap: 8px; padding-top: 5px; }
 .size-a5 .doc-totals { margin-bottom: 6px; }
 .size-a5 .doc-totals table { min-width: 205px; }
 .size-a5 .doc-totals td,
@@ -290,6 +315,7 @@ button, input, select, textarea {
 .size-a5 .lh-logo { width: 15mm; height: 15mm; }
 .size-a5 .lh-contact { font-size: 7px; padding-top: 4px; }
 .size-a5 .lh-image .lh-ref-value { font-size: 9px; }
+.size-a5.doc-page-letterhead .doc-content { min-height: 171mm; }
 
 @media print {
   html, body { background: #fff; }

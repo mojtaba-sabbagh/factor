@@ -35,7 +35,7 @@ export default function PrintView({ invoice, company }: { invoice: Invoice; comp
             <input type="radio" checked={size === "a5"} onChange={() => setSize("a5")} /> A5
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={useLetterhead} onChange={(e) => setUseLetterhead(e.target.checked)} /> استفاده از سربرگ
+            <input type="checkbox" checked={useLetterhead} onChange={(e) => setUseLetterhead(e.target.checked)} /> چاپ طرح سربرگ
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
             <input type="checkbox" checked={withSeal} onChange={(e) => setWithSeal(e.target.checked)} /> درج مهر
@@ -59,7 +59,8 @@ export default function PrintView({ invoice, company }: { invoice: Invoice; comp
         invoice={invoice}
         company={company}
         size={size}
-        useLetterhead={useLetterhead}
+        useLetterhead
+        showLetterheadImage={useLetterhead}
         withSeal={withSeal}
         withSignature={withSignature}
       />

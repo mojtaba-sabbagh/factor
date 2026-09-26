@@ -33,8 +33,8 @@ export default function Letterhead({
   const address = company.letterheadAddress || company.address;
 
   return (
-    <div className={`lh${showArtwork ? "" : " lh-ghost"}`}>
-      <div className="lh-header">
+    <div className="lh">
+      <div className={`lh-header${showArtwork ? "" : " lh-ghost"}`}>
         <div className="lh-topbar" />
         <div className="lh-stripes lh-stripes-top" />
         <img className="lh-bismillah" src="/assets/bismillah.png" alt="بسمه تعالی" />
@@ -68,7 +68,7 @@ export default function Letterhead({
         <div className="lh-rule" />
       </div>
 
-      <div className="lh-footer">
+      <div className={`lh-footer${showArtwork ? "" : " lh-ghost"}`}>
         <div className="lh-rule lh-rule-footer" />
         <div className="lh-contact">
           <div>
