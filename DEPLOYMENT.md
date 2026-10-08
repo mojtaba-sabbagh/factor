@@ -136,6 +136,12 @@ A successful build ends with a route table (`○ /login`, `ƒ /`, ...) and write
 `.next/`. The `prisma postinstall` hook works even in production mode because
 `prisma` is listed in `dependencies`, not `devDependencies`.
 
+On cPanel the `node_modules` folder in the application root must stay a
+**symlink** into the virtualenv; the Node.js Selector's `npm` wrapper refuses to
+run while a real folder with that name is there. Never extract an archive that
+contains a `node_modules/` entry into the application root (see
+[Troubleshooting](#cloudlinux-nodejs-selector-node_modules-must-be-a-symlink)).
+
 Both steps above download from the internet, and the engines do **not** come from
 the npm registry: `npm install` runs Prisma's `postinstall` hooks, which fetch
 them from `binaries.prisma.sh`, and `npx prisma generate` does the same. If the
@@ -234,11 +240,66 @@ Common causes:
 * Wrong credentials / database name in `DATABASE_URL` (cPanel prefixes both with
   the account name).
 * The database user was not granted **ALL PRIVILEGES**.
-* Wrong Prisma query engine for the host OS:
-  `Query engine library for current platform "rhel-openssl-1.1.x" could not be found`.
-  `prisma/schema.prisma` already lists the Linux targets, but after changing them
-  you must re-run `npx prisma generate` on the server (or locally, then re-upload
-  `node_modules/.prisma`).
+* Wrong or missing Prisma query engine for the host OS:
+  `Query engine library for current platform "debian-openssl-1.1.x" could not be found`.
+  The target in that message is the one this host resolved for itself, and the
+  generated client has to contain the matching
+  `libquery_engine-<target>.so.node`. `prisma/schema.prisma` lists five Linux
+  targets, so re-generate locally and re-upload the bundle
+  ([Appendix D, Path 2](#path-2--ship-the-client-generate-nothing-on-the-server-recommended)),
+  or drop the single missing file in by hand
+  ([Path 2b](#path-2b--download-a-single-engine-file-by-hand)). Running
+  `npx prisma generate` **on the server** cannot fix it while
+  `binaries.prisma.sh` is unreachable.
+* Engine file present, but the loader rejects it (`GLIBC_2.xx not found`,
+  `libssl.so.1.1: cannot open shared object file`, `version CXXABI_1.3.11 not
+  found`): the engine was built for a different libc/OpenSSL than the host runs.
+  The bundle ships the glibc-2.17 RHEL builds for exactly this case, so point the
+  client at one of them instead of re-generating:
+  `export PRISMA_QUERY_ENGINE_LIBRARY="$(dirname "$(readlink -f node_modules)")/.prisma/client/libquery_engine-rhel-openssl-1.1.x.so.node"`
+  (absolute path, executable). Check the host first with
+  `ldd --version | head -1` and `openssl version`.
+
+### Cloudlinux NodeJS Selector: node_modules must be a symlink
+
+```text
+Cloudlinux NodeJS Selector demands to store node modules for application in separate folder
+(virtual environment) pointed by symlink called "node_modules". That's why application
+should not contain folder/file with such name in application root
+```
+
+cPanel's Node.js Selector keeps every package in the virtualenv and expects the
+application root to contain only a **symlink** to it
+(`node_modules -> /home/user/nodevenv/factor/20/lib/node_modules`). Its `npm`
+wrapper refuses to run while a real folder with that name is present — the
+message above is printed *instead of* running npm, so nothing was installed.
+
+The usual cause during a deployment is a `tar`/ZIP extract of an archive that has
+a `node_modules/` entry: GNU tar replaces the symlink with a real folder. Check
+what you have:
+
+```bash
+cd ~/factor
+ls -ld node_modules        # symlink -> .../lib/node_modules, or a real directory
+```
+
+If it is a real folder — probably an upload from Windows or an unpacked offline
+bundle — remove it, restore the symlink and install into the virtualenv:
+
+```bash
+cd ~/factor
+rm -rf node_modules                                    # after the check above
+ln -s "$HOME/nodevenv/factor/20/lib/node_modules" node_modules
+
+npm install --ignore-scripts --include=dev
+tar -xzf prisma-offline-client.tgz -C "$(dirname "$(readlink -f node_modules)")"
+```
+
+Clicking **Run NPM Install** (Application Manager → app → *Enable Dependencies*,
+or Setup Node.js App) recreates the symlink too, and is the supported way.
+Afterwards never extract an archive containing `node_modules` with a plain
+`tar -xzf` in the application root: pass `-C "$(dirname "$(readlink -f node_modules)")"`
+or `tar --keep-directory-symlink`.
 
 ### Prisma cannot download its engines (`binaries.prisma.sh`)
 
@@ -250,8 +311,10 @@ request to https://binaries.prisma.sh/... failed, reason: connect ETIMEDOUT
 ```
 
 The engines are not part of the npm package, they are downloaded from Prisma's
-own host. Either point Prisma at a mirror or skip the download completely — both
-are described in
+own host. Note the target in that URL (`debian-openssl-1.1.x`, `rhel-openssl-3.0.x`,
+…) — it is the one this host needs — then either point Prisma at a mirror, ship the
+generated client, or copy that single engine file in by hand. All three are
+described in
 [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash).
 
 ### Login redirects back to /login in a loop
@@ -398,6 +461,32 @@ node -p "require('@prisma/engines-version').enginesVersion"
 # 605197351a3c8bdd595af2d2a9bc3025bca48ea2
 ```
 
+The **platform target** in the same URL (`debian-openssl-3.0.x` above) is the one
+the host resolved for itself, and both parts are reused in every command below.
+A cPanel/CloudLinux box with OpenSSL 1.1 asks for `debian-openssl-1.1.x` instead,
+so read the target from the actual error (or ask the server) **before** packing
+anything:
+
+```bash
+node -e "require('@prisma/get-platform').getBinaryTargetForCurrentPlatform().then(console.log)"
+# debian-openssl-1.1.x   <- what this host needs
+```
+
+If that target is not listed in `binaryTargets` in `prisma/schema.prisma`, add it
+there and re-generate; otherwise the engine it asks for is simply not in the
+bundle.
+
+Four ways to get past the block, depending on how much of the install works:
+
+* [Path 1](#path-1--point-prisma-at-a-mirror-fastest) — the host can reach
+  `registry.npmmirror.com`, so only Prisma's download URL has to be redirected.
+* [Path 2](#path-2--ship-the-client-generate-nothing-on-the-server-recommended) —
+  the npm registry works, but no engine download is possible at all.
+* [Path 2b](#path-2b--download-a-single-engine-file-by-hand) — one engine file is
+  all that is missing.
+* [Path 3](#path-3--the-npm-registry-is-blocked-as-well) — the npm registry is
+  blocked too, so everything is prebuilt on a Linux machine.
+
 ### Path 1 — point Prisma at a mirror (fastest)
 
 Prisma builds the download URL from an environment variable, so any mirror with
@@ -426,9 +515,10 @@ npx prisma generate
 * Both `export`s must be set **before** `npm install`: its `postinstall` hooks are
   the steps that download the engines. Keep them exported for
   `npx prisma migrate deploy` as well.
-* If a host-specific engine target is unknown, `prisma` prints it in the error
-  message (`could not be found` / `not available for ...`), and
-  `node -p 'process.platform'` plus `ldd --version` give the same answer.
+* The target in the error URL is the one this host resolved for itself
+  (`debian-openssl-1.1.x` on a CloudLinux box with OpenSSL 1.1). If it is not in
+  `binaryTargets` in `prisma/schema.prisma`, add it there first — the mirror has
+  the same files under the same paths.
 
 ### Path 2 — ship the client, generate nothing on the server (recommended)
 
@@ -440,28 +530,38 @@ and unpacked on the server, so the host never contacts `binaries.prisma.sh`.
 ```bash
 npx prisma generate
 npm run prisma:offline-bundle
-#   + prisma-offline-client.tgz (31.2 MB)
+#   + prisma-offline-client.tgz (38.2 MB)
 #
 #   Engines inside:
+#     - libquery_engine-debian-openssl-1.1.x.so.node (15.4 MB)
 #     - libquery_engine-debian-openssl-3.0.x.so.node (15.4 MB)
 #     - libquery_engine-linux-musl-openssl-3.0.x.so.node (15.4 MB)
 #     - libquery_engine-rhel-openssl-1.1.x.so.node (15.4 MB)
 #     - libquery_engine-rhel-openssl-3.0.x.so.node (15.4 MB)
 ```
 
-`prisma/schema.prisma` lists the Linux targets next to `native`, so all four
-engines are generated at once and the bundle works on Debian/Ubuntu, CloudLinux
-and Alpine hosts. If the upload is slow, keep a single engine — the one the host
-reports (run this **on the server**):
+`prisma/schema.prisma` lists the Linux targets next to `native`, so all five
+engines are generated at once: Debian/Ubuntu with OpenSSL 1.1 or 3.0,
+CloudLinux/AlmaLinux/CentOS with OpenSSL 1.1 or 3.0, and Alpine (musl).
+
+Before packing, check which target the host actually asks for. Its failed download
+names it (`.../debian-openssl-1.1.x/libquery_engine.so.node.gz.sha256`), and so
+does this, run **on the server**:
 
 ```bash
 node -e "require('@prisma/get-platform').getBinaryTargetForCurrentPlatform().then(console.log)"
-# debian-openssl-3.0.x
-
-npm run prisma:offline-bundle -- --target debian-openssl-3.0.x   # ~10 MB tarball
+# debian-openssl-1.1.x
 ```
 
-**On the server** (upload the tarball first, ~31 MB in, ~65 MB unpacked):
+If that value is missing from the list above, add it to `binaryTargets` in
+`prisma/schema.prisma`, run `npx prisma generate` again and re-pack. When the
+upload is slow, ship one engine only:
+
+```bash
+npm run prisma:offline-bundle -- --target debian-openssl-1.1.x   # ~10 MB tarball
+```
+
+**On the server** (upload the tarball first, ~38 MB in, ~80 MB unpacked):
 
 ```bash
 cd ~/factor
@@ -472,13 +572,72 @@ source /home/cpaneluser/nodevenv/factor/20/bin/activate
 # and all three are replaced by the tarball below.
 npm install --ignore-scripts --include=dev
 
-tar -xzf prisma-offline-client.tgz   # node_modules/.prisma/client + node_modules/@prisma/client
+# cPanel's Node.js Selector requires node_modules in the application root to be
+# a symlink into the virtualenv, and the tarball contains a node_modules/ folder
+# entry: plain `tar -xzf` would replace that symlink with a real folder, after
+# which npm refuses to run. So extract into the folder the symlink points to.
+ls -ld node_modules                                     # symlink -> .../lib/node_modules
+tar -xzf prisma-offline-client.tgz -C "$(dirname "$(readlink -f node_modules)")"
+
 npm run build
 ```
 
-Do **not** run `npx prisma generate` there afterwards: the extracted client is
-already the generated one and picks its engine by platform at runtime. The tarball
-is git-ignored; `npm run prisma:offline-bundle -- --help` lists the other options.
+`tar --keep-directory-symlink -xzf prisma-offline-client.tgz` in the application
+root does the same thing. Do **not** run `npx prisma generate` there afterwards:
+the extracted client is already the generated one and picks its engine by
+platform at runtime. The tarball is git-ignored;
+`npm run prisma:offline-bundle -- --help` lists the other options.
+
+### Path 2b — download a single engine file by hand
+
+Sometimes only one engine file is missing — `npx prisma generate` on the server
+stops at its very first download, or a previous deploy already left a generated
+client that only lacks the engine for this host's target. Then uploading 38 MB is
+not necessary: one engine is 7.4 MB compressed (for `debian-openssl-1.1.x`).
+
+On the development machine (or any machine that can reach the mirror):
+
+```bash
+TARGET=debian-openssl-1.1.x                                     # from the error URL / from the server
+COMMIT=605197351a3c8bdd595af2d2a9bc3025bca48ea2                  # node -p "require('@prisma/engines-version').enginesVersion"
+
+BASE="https://registry.npmmirror.com/-/binary/prisma/all_commits/$COMMIT/$TARGET"
+# if binaries.prisma.sh is reachable from here, use:
+# BASE="https://binaries.prisma.sh/all_commits/$COMMIT/$TARGET"
+
+curl -fL -o libquery_engine.gz "$BASE/libquery_engine.so.node.gz"
+curl -fL -o libquery_engine.gz.sha256 "$BASE/libquery_engine.so.node.gz.sha256"
+sha256sum libquery_engine.gz          # 99ccc47aa11fb40ec7db97acb2f481fc6323cd0c4431273ceb4d1ae89a5105e7
+# (Windows: Get-FileHash libquery_engine.gz -Algorithm SHA256)
+
+gunzip -c libquery_engine.gz > "libquery_engine-$TARGET.so.node"
+sha256sum "libquery_engine-$TARGET.so.node"   # bc2976be96a9f6abeeb9e2d6626aa5cb2837d852bb61816c2c84c13ec13387b4
+```
+
+Upload `libquery_engine-$TARGET.so.node` and drop it into the **generated
+client**, i.e. the folder `prisma-client-js` writes to:
+
+```bash
+cd ~/factor
+source /home/cpaneluser/nodevenv/factor/20/bin/activate   # your own venv path
+
+CLIENT="$(dirname "$(readlink -f node_modules)")/.prisma/client"
+ls "$CLIENT" | head                     # index.js, default.js, schema.prisma, ...
+mv ~/libquery_engine-debian-openssl-1.1.x.so.node "$CLIENT/"
+chmod +x "$CLIENT"/libquery_engine-*.so.node
+```
+
+* The file name matters: at runtime the client looks for exactly
+  `libquery_engine-<target>.so.node`, using the target it resolved for this host.
+* **This only completes a client that is already there.** `index.js`,
+  `default.js` and `schema.prisma` are produced by `prisma generate`, which itself
+  needs the engines — so if `$CLIENT` is empty, use Path 2 instead (its tarball
+  carries both halves).
+* Nothing has to be copied at all if the client is pointed at the file:
+  `export PRISMA_QUERY_ENGINE_LIBRARY="$HOME/factor/engines/libquery_engine-debian-openssl-1.1.x.so.node"`
+  (absolute path, executable). Useful for trying a second target without
+  re-generating — see the *500 error on every request* entry under
+  [Troubleshooting](#500-error-on-every-request).
 
 ### Migrations when `binaries.prisma.sh` is unreachable
 
@@ -565,9 +724,21 @@ Upload the archive into `~/factor` and extract it there; on the server no `npm`
 or `prisma` command runs at all, only:
 
 ```bash
-tar -xzf factor-release.tgz
+cd ~/factor
+
+# node_modules must stay a symlink into the virtualenv (see Troubleshooting);
+# the Selector creates it, add it by hand only if it is missing:
+ls -ld node_modules || ln -s "$HOME/nodevenv/factor/20/lib/node_modules" node_modules
+
+tar -xzf factor-release.tgz -C "$(dirname "$(readlink -f node_modules)")" node_modules
+tar -xzf factor-release.tgz .next
+
 mkdir -p tmp && touch tmp/restart.txt
 ```
+
+The first `tar` writes the packages next to the symlink's target (a plain
+`tar -xzf` in the root would replace the symlink with a real folder and break the
+Selector); the second one only unpacks the build output.
 
 Keep the code itself in sync with `git pull` (or upload `src/`, `prisma/`,
 `package.json`, `app.js`, `next.config.js`) — and rebuild + re-upload `.next`

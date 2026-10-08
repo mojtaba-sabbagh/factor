@@ -7,7 +7,10 @@ generator client {
   // uploaded. native = the current machine, debian-* covers Debian/Ubuntu
   // (and usually cPanel's own Linux), rhel-* covers CloudLinux/AlmaLinux/
   // CentOS, musl covers Alpine-based containers.
-  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x", "rhel-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
+  // The cPanel/CloudLinux host below asks for debian-openssl-1.1.x, because
+  // that is the target it resolved for itself (distro + OpenSSL):
+  //   node -e "require('@prisma/get-platform').getBinaryTargetForCurrentPlatform().then(console.log)"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "rhel-openssl-3.0.x", "rhel-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

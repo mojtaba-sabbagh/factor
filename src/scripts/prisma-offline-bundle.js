@@ -155,12 +155,18 @@ function report(outPath, kept, dropped) {
   console.log("\n  Left out:");
   if (dropped.length === 0) console.log("    - nothing");
   for (const engine of dropped) console.log(`    - ${engine.name}`);
+  const tar = path.basename(outPath);
   console.log(
     "\n  On the server, in the application root:\n" +
       "    npm install --ignore-scripts --include=dev\n" +
-      `    tar -xzf ${path.basename(outPath)}\n` +
+      `    tar -xzf ${tar} -C "$(dirname "$(readlink -f node_modules)")"\n` +
       "    npm run build\n" +
-      "\n  Do not run `npx prisma generate` there: the client above is the\n" +
+      "\n  cPanel/CloudLinux (Node.js Selector) keeps node_modules as a symlink to\n" +
+      "  the virtualenv, and the tarball contains a node_modules/ folder entry: a\n" +
+      "  plain `tar -xzf` would replace that symlink with a real folder and npm\n" +
+      "  would refuse to run afterwards. Extracting into the symlink target (the\n" +
+      "  command above) or using `tar --keep-directory-symlink` avoids that.\n" +
+      "\n  Do not run `npx prisma generate` there: the extracted client is the\n" +
       "  generated one, and it already contains the Linux engine.\n",
   );
 }
