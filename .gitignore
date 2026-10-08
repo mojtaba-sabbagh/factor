@@ -2,6 +2,10 @@
 node_modules/
 .next/
 
+# Prisma Client packed for hosts that cannot reach binaries.prisma.sh
+# (npm run prisma:offline-bundle — see DEPLOYMENT.md, Appendix D)
+prisma-offline-client.tgz
+
 # Local configuration and credentials
 .env
 .env.local

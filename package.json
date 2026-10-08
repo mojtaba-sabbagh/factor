@@ -12,6 +12,7 @@
     "serve": "node app.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
+    "prisma:offline-bundle": "node src/scripts/prisma-offline-bundle.js",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "create:superadmin": "node src/scripts/create-superadmin.js",
