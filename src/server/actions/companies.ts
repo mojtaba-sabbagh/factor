@@ -25,7 +25,11 @@ export type SaveCompanyState = { error?: string; ok?: boolean } | undefined;
 export async function saveCompanyAction(company: Company): Promise<SaveCompanyState> {
   const auth = await requireCompany();
   if (company.id !== auth.companyId) return { error: "دسترسی غیرمجاز." };
-  const settings: Record<string, unknown> = {};
+  // Every entry in COMPANY_FIELDS is either a string or the `letterheads` string
+  // map, so this object is always a plain JSON document. It is typed explicitly
+  // (instead of Record<string, unknown>) because Prisma's Json column expects an
+  // InputJsonValue, which `unknown` values are not assignable to.
+  const settings: Record<string, string | Record<string, string>> = {};
   for (const field of COMPANY_FIELDS) settings[field] = company[field];
   await db.company.update({ where: { id: auth.companyId }, data: { name: company.name || "", settings } });
   revalidatePath("/settings");

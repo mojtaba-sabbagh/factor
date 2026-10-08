@@ -1,0 +1,3 @@
+# Phusion Passenger restarts the app when tmp/restart.txt is touched.
+# See DEPLOYMENT.md ("Restarting the app"). This folder has to exist in the
+# application root, which is why it is tracked with a .gitkeep file.

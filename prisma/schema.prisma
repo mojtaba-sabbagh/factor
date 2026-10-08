@@ -1,5 +1,13 @@
 generator client {
   provider = "prisma-client-js"
+
+  // cPanel / CloudLinux hosts are Linux, while development usually happens on
+  // Windows or macOS. Listing the targets explicitly means a client generated
+  // on the dev machine still finds a working query engine after the code is
+  // uploaded. native = the current machine, debian-* covers Debian/Ubuntu
+  // (and usually cPanel's own Linux), rhel-* covers CloudLinux/AlmaLinux/
+  // CentOS, musl covers Alpine-based containers.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x", "rhel-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

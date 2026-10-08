@@ -5,6 +5,17 @@ const SESSION_COOKIE = "factor_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, rolling
 const RECOVERY_TTL_SECONDS = 60 * 60; // 1 hour
 
+// Secure cookies are the right default in production, but a host that still
+// serves the app over plain HTTP (no SSL certificate yet) would make the
+// browser silently drop the session cookie, turning every login into a
+// redirect loop. SESSION_COOKIE_SECURE=false is the escape hatch for that
+// case; leave it unset once the site is on HTTPS.
+function cookieSecure() {
+  const override = process.env.SESSION_COOKIE_SECURE;
+  if (override) return override === "true";
+  return process.env.NODE_ENV === "production";
+}
+
 function secretKey() {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error("SESSION_SECRET is not set. Copy .env.example to .env.local and fill it in.");
@@ -23,7 +34,7 @@ export async function createSession(userId: string) {
 
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: cookieSecure(),
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,

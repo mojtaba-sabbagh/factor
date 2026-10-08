@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import {
@@ -83,10 +84,22 @@ function ChangePasswordForm() {
 //  - otherwise (reached from the sidebar while signed in) → change password
 // middleware.ts allows this path through without a session so the first two cases work
 // for signed-out visitors.
-export default function AccountPage() {
+function AccountPageContent() {
   const params = useSearchParams();
   const token = params.get("recovery_token");
   if (token) return <ResetPasswordForm token={token} />;
   if (params.get("mode") === "recover") return <RecoveryRequestForm />;
   return <ChangePasswordForm />;
+}
+
+// useSearchParams() forces the page to bail out of static prerendering, which
+// Next.js only allows inside a Suspense boundary — without one `next build`
+// fails with "useSearchParams() should be wrapped in a suspense boundary at
+// page /account".
+export default function AccountPage() {
+  return (
+    <Suspense fallback={null}>
+      <AccountPageContent />
+    </Suspense>
+  );
 }

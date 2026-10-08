@@ -1,0 +1,59 @@
+# Example Passenger configuration for cPanel.
+#
+# Normally you do NOT need to create this by hand: cPanel's "Setup Node.js App"
+# writes an equivalent block into the document root of the domain you picked
+# (usually /home/USER/public_html/.htaccess). Copy this file there if you set the
+# app up manually, or if the app URL is the domain root but the .htaccess is
+# missing after a restore/migration.
+#
+# Replace USER, the app folder name and the Node.js version directory with the
+# real values. The Node.js binary path must be the one printed by cPanel in
+# "Setup Node.js App" (App directory / virtualenv), e.g.
+#   /home/USER/nodevenv/factor/20/bin/node
+
+PassengerAppRoot "/home/USER/factor"
+PassengerBaseURI "/"
+PassengerNodejs "/home/USER/nodevenv/factor/20/bin/node"
+PassengerAppType node
+PassengerStartupFile app.js
+PassengerFriendlyErrorPages off
+
+# ---------------------------------------------------------------------------
+# Hardening. Only relevant if the application root is inside the document root
+# (e.g. you uploaded the code straight into public_html). Phusion Passenger
+# serves any file that exists on disk directly, so without these rules
+# /package.json, /.env and the Prisma migration SQL would be downloadable.
+# Add the block below to the same document root in that case.
+
+<FilesMatch "^\.env.*$">
+  Require all denied
+</FilesMatch>
+
+RedirectMatch 404 ^/\.git
+RedirectMatch 404 ^/\.next
+
+# Node.js virtualenv and dependency folders must never be served.
+RedirectMatch 404 /node_modules/
+RedirectMatch 404 /nodevenv/
+RedirectMatch 404 /tmp/passenger
+
+# Passenger only needs the *.js/*.json files it reads with fs; nothing else in
+# the app root should be reachable over HTTP.
+
+# ---------------------------------------------------------------------------
+# Optional: let Apache serve the immutable Next.js build assets so they skip the
+# Node process entirely. Next fingerprints every file under /_next/static, so a
+# long cache lifetime is safe. Passenger will still serve them if these rules are
+# omitted.
+#
+# The env= filter keeps this limited to /_next/static/: files under /public
+# (e.g. /assets/default-seal.png) are NOT content-hashed, so they must keep
+# default caching or browsers would hold on to a stale version forever.
+
+<IfModule mod_setenvif.c>
+  <IfModule mod_headers.c>
+    SetEnvIf Request_URI "^/_next/static/" next_immutable
+    Header set Cache-Control "public, max-age=31536000, immutable" env=next_immutable
+  </IfModule>
+</IfModule>
+

@@ -70,7 +70,9 @@ export default function JalaliDatePicker({
         jm = 1;
         jy += 1;
       }
-      return { jy, jm };
+      // Spread prev so the day-of-month part of the view state is preserved;
+      // returning only { jy, jm } breaks the { jy, jm, jd } state shape.
+      return { ...prev, jy, jm };
     });
   }
 

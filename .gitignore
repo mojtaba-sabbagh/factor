@@ -8,3 +8,10 @@ node_modules/
 
 # Logs
 *.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Passenger restart file and runtime logs on cPanel (keep the folder itself)
+/tmp/*
+!/tmp/.gitkeep

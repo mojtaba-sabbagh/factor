@@ -41,7 +41,12 @@ export const EMPTY_COMPANY: Company = {
 };
 
 // Fields stored inside companies.settings jsonb (name/active/id live in their own columns).
-export const COMPANY_FIELDS: (keyof Company)[] = [
+// Narrowing the type to "everything except the real columns" also makes
+// `company[field]` resolve to `string | Record<string, string>` instead of the
+// whole Company value union, which is what the jsonb column can hold.
+export type CompanySettingField = Exclude<keyof Company, "id" | "name" | "active">;
+
+export const COMPANY_FIELDS: CompanySettingField[] = [
   "companyType", "address", "letterheadAddress", "postalCode", "email", "phone",
   "economicCode", "nationalId", "registrationNumber", "ceoName", "logo", "seal",
   "signature", "letterheads", "iban",
