@@ -132,9 +132,23 @@ npx prisma generate      # also runs automatically via postinstall
 npm run build
 ```
 
+Adapt the two paths: the venv is `/home/<user>/nodevenv/<app>/<node-major>/…`, so a
+Node 22 application on user `sftgroup` activates with
+`source /home/sftgroup/nodevenv/factor/22/bin/activate`.
+
 A successful build ends with a route table (`○ /login`, `ƒ /`, ...) and writes
 `.next/`. The `prisma postinstall` hook works even in production mode because
 `prisma` is listed in `dependencies`, not `devDependencies`.
+
+> **Use the pinned CLI, never bare `npx prisma`.** `npx` only uses the local CLI
+> when it is actually installed; otherwise it downloads the `latest` dist-tag
+> from the npm registry, and that is no longer Prisma 5 (at the time of writing
+> `prisma@latest` is `8.0.0-rc.22` with `@prisma/composer 0.29.1`, where
+> `generate`/`migrate` have other names). The symptom is
+> `✘ [CLI.UNKNOWN_COMMAND] No command registered for \`generate\`` plus an
+> "agent skills" notice. Use the npm scripts (`npm run prisma:generate`,
+> `npm run db:deploy`) or `./node_modules/.bin/prisma …`: both always resolve the
+> version pinned in `package-lock.json` (5.22.0).
 
 On cPanel the `node_modules` folder in the application root must stay a
 **symlink** into the virtualenv; the Node.js Selector's `npm` wrapper refuses to
@@ -155,8 +169,8 @@ of these three commands.
 cd ~/factor
 source /home/cpaneluser/nodevenv/factor/20/bin/activate
 
-npx prisma migrate deploy     # or: npm run db:deploy
-npx prisma migrate status     # or: npm run db:status  -> "Database schema is up to date!"
+npm run db:deploy             # = ./node_modules/.bin/prisma migrate deploy
+npm run db:status             # -> "Database schema is up to date!"
 
 npm run create:superadmin -- you@example.com "a-strong-password"
 ```
@@ -198,7 +212,7 @@ source /home/cpaneluser/nodevenv/factor/20/bin/activate
 
 git pull
 npm install --include=dev
-npx prisma migrate deploy     # only when prisma/migrations changed
+npm run db:deploy             # only when prisma/migrations changed
 npm run build
 mkdir -p tmp && touch tmp/restart.txt
 ```
@@ -317,6 +331,37 @@ generated client, or copy that single engine file in by hand. All three are
 described in
 [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash).
 
+### Wrong Prisma CLI (`No command registered for generate`)
+
+```text
+✘ [CLI.UNKNOWN_COMMAND] No command registered for `generate`
+→ List every command: prisma --help
+Prisma agent skills are out of date (installed @prisma/composer 0.29.1, synced none). Run: prisma skills sync
+```
+
+That is not this project's CLI. `npx` falls back to downloading the `latest`
+dist-tag from the npm registry when no local CLI is installed, and `prisma@latest`
+is now Prisma 8 (`8.0.0-rc.22` with `@prisma/composer 0.29.1`), where the commands
+have other names (`migrate` → `migration`, no `generate`). This project pins
+**5.22.0** in `package-lock.json` and its scripts (`postinstall`, `db:deploy`, …)
+rely on that version.
+
+```bash
+cd ~/factor
+source /home/cpaneluser/nodevenv/factor/20/bin/activate
+
+ls -l node_modules/.bin/prisma          # must exist
+./node_modules/.bin/prisma -v           # prisma: 5.22.0, @prisma/client: 5.22.0
+```
+
+If that file is missing, the project was never installed into the virtualenv —
+extracting the offline bundle only adds `@prisma/client` and `.prisma/client`, no
+CLI and no Next.js. Run `npm install --ignore-scripts --include=dev` (see
+[step 6](#6-install-dependencies-and-build)), then use the npm scripts
+(`npm run db:status`, `npm run db:deploy`, `npm run prisma:generate`) or
+`npx --no-install prisma …`, which fails loudly instead of silently installing
+another major version.
+
 ### Login redirects back to /login in a loop
 
 The session cookie was dropped by the browser. This happens when the cookie is
@@ -327,6 +372,63 @@ missing.
 ### `npm ERR!` / build fails on missing typescript
 
 `npm install` was run in production mode. Re-run `npm install --include=dev`.
+
+### `pthread_create: Resource temporarily unavailable` during `npm run build`
+
+The build compiles fine and then aborts while **Collecting page data**:
+
+```text
+ ✓ Compiled successfully
+ ✓ Linting and checking validity of types
+   Collecting page data  ...node[169554]: pthread_create: Resource temporarily unavailable
+ ⨯ Next.js build worker exited with code: null and signal: SIGABRT
+```
+
+This is not an application bug. For "Collecting page data" Next forks one build
+worker per CPU — its default is `os.cpus().length - 1`, i.e. ~31 on a 32-core
+host — and each worker starts its own thread pool. A cPanel/CloudLinux account
+caps the total number of processes and threads it may create, so on a many-core
+shared host that limit is hit and `pthread_create` fails with `EAGAIN`.
+
+`next.config.js` already pins the build to a single worker:
+
+```js
+experimental: {
+  cpus: 1,
+  webpackBuildWorker: false,
+}
+```
+
+If a build still aborts (some hosts set `ulimit -u` very low), shrink the
+per-process thread pool too and retry:
+
+```bash
+UV_THREADPOOL_SIZE=1 npm run build
+```
+
+If it keeps failing, the account cannot fork enough processes at all. Build the
+release elsewhere and upload only the build output (same Node **major** version
+as the app — 22 here):
+
+```bash
+# Linux/WSL/Docker, inside a fresh checkout of the same commit
+docker run --rm -v "$PWD:/app" -w /app node:22-bookworm-slim \
+  sh -lc "npm install --include=dev && npx prisma generate && npm run build"
+tar -czf factor-release.tgz .next
+```
+
+Upload `factor-release.tgz` into `~/factor` and extract just the build output —
+`node_modules` must stay the virtualenv symlink
+(`tar -xzf factor-release.tgz -C ~/factor .next`). See
+[Appendix A](#appendix-a-no-terminal-access) and
+[Path 3 in Appendix D](#path-3--the-npm-registry-is-blocked-as-well).
+
+> The unrelated `You are using a non-standard "NODE_ENV" value` warning means the
+> shell or Passenger exports `NODE_ENV` as something other than
+> `development`/`production`/`test` (frequently an empty value). It does not cause
+> the abort, but silence it with `unset NODE_ENV` (or `export NODE_ENV=production`)
+> before building.
+
 
 ### "Cannot find module 'next/dist/...'" or 503 after a successful install
 
@@ -408,7 +510,7 @@ available you have two options:
    (`psql`), or by running the SQL in
    `prisma/migrations/20260926014009_init/migration.sql` manually, then marking it
    applied with
-   `npx prisma migrate resolve --applied 20260926014009_init`.
+   `./node_modules/.bin/prisma migrate resolve --applied 20260926014009_init`.
 
 ## Appendix B — PM2 instead of Passenger
 
@@ -583,10 +685,16 @@ npm run build
 ```
 
 `tar --keep-directory-symlink -xzf prisma-offline-client.tgz` in the application
-root does the same thing. Do **not** run `npx prisma generate` there afterwards:
+root does the same thing. Order matters: install first, extract the bundle
+second, build last — `npm install` reifies the dependency tree and can drop
+folders it does not know about, `.prisma` among them. Do **not** run
+`npx prisma generate` there afterwards:
 the extracted client is already the generated one and picks its engine by
-platform at runtime. The tarball is git-ignored;
-`npm run prisma:offline-bundle -- --help` lists the other options.
+platform at runtime. For the migration commands prefer `./node_modules/.bin/prisma`
+(or the npm scripts) over `npx prisma` — see
+[wrong Prisma CLI](#wrong-prisma-cli-no-command-registered-for-generate).
+The tarball is git-ignored; `npm run prisma:offline-bundle -- --help` lists the
+other options.
 
 ### Path 2b — download a single engine file by hand
 
@@ -648,7 +756,7 @@ Two ways out:
 **Option A — bring the schema engine along.** On the development machine:
 
 ```bash
-TARGET=debian-openssl-3.0.x
+TARGET=debian-openssl-1.1.x     # your host's target, from the server error
 COMMIT=$(node -p "require('@prisma/engines-version').enginesVersion")
 curl -fL -o "schema-engine-$TARGET.gz" \
   "https://registry.npmmirror.com/-/binary/prisma/all_commits/$COMMIT/$TARGET/schema-engine.gz"
@@ -658,18 +766,25 @@ gunzip -c "schema-engine-$TARGET.gz" > "schema-engine-$TARGET"
 Upload it, then on the server:
 
 ```bash
-mkdir -p ~/factor/engines && mv ~/schema-engine-debian-openssl-3.0.x ~/factor/engines/
-chmod +x ~/factor/engines/schema-engine-debian-openssl-3.0.x
+TARGET=debian-openssl-1.1.x     # same value as above
+mkdir -p ~/factor/engines && mv ~/"schema-engine-$TARGET" ~/factor/engines/
+chmod +x ~/factor/engines/"schema-engine-$TARGET"
 
 cd ~/factor
 source /home/cpaneluser/nodevenv/factor/20/bin/activate
-PRISMA_SCHEMA_ENGINE_BINARY="$HOME/factor/engines/schema-engine-debian-openssl-3.0.x" \
-  npx prisma migrate deploy
+./node_modules/.bin/prisma -v      # must print 5.22.0 — see the wrong-CLI entry below
+
+PRISMA_SCHEMA_ENGINE_BINARY="$HOME/factor/engines/schema-engine-$TARGET" \
+  ./node_modules/.bin/prisma migrate deploy
 ```
 
 `PRISMA_SCHEMA_ENGINE_BINARY` is the documented way to hand Prisma a locally
 stored engine; `prisma migrate status` and `migrate resolve` accept it as well.
-The file must be executable (`chmod +x`).
+The file must be executable (`chmod +x`). Always call the CLI through
+`./node_modules/.bin/prisma` (or `npx --no-install prisma`) here: a bare
+`npx prisma` would download `prisma@latest` — Prisma 8, where `migrate` is called
+`migration` — whenever the pinned CLI is missing
+([Troubleshooting](#wrong-prisma-cli-no-command-registered-for-generate)).
 
 **Option B — apply the SQL with `psql`.** No Prisma binary at all; use it for the
 first deploy, while the database is still empty:
