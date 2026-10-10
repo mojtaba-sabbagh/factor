@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Emit a self-contained `.next/standalone/` (server.js + the minimal
+  // node_modules it traces) on top of the normal `.next` build, so a release can
+  // be built off the host and shipped without installing dependencies there.
+  output: "standalone",
+
   experimental: {
     serverActions: { bodySizeLimit: "5mb" }, // logo/seal/signature images travel as data URLs
 

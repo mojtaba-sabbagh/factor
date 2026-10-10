@@ -4,11 +4,66 @@ This app is a Next.js 14 (App Router) application with Prisma + PostgreSQL. cPan
 runs Node.js apps through Phusion Passenger, so the deployment has three parts
 that do not exist in a local setup:
 
-1. Passenger needs a startup file — that is what `app.js` in the project root is
-   for (`next start` cannot be used, see [Why `app.js`](#why-appjs-exists)).
-2. The production build (`npm run build`) and the database migration
-   (`prisma migrate deploy`) have to be run once on the server.
+1. Passenger needs a startup file — that is what `server.js` in the project root
+   is for (`next start` cannot be used, see [Why `server.js`](#why-serverjs-exists)).
+2. The production build is made on **your** machine and shipped as
+   `deploy.zip`; the host only installs dependencies and applies the database
+   migration — see [Deploy in one pass](#deploy-in-one-pass-the-normal-case).
 3. The environment variables from `.env.example` must be set on the server.
+
+---
+
+## Deploy in one pass (the normal case)
+
+Everything below is the long form. This is the flow actually in use.
+
+**On your machine** (any OS; use the same Node *major* version as the server):
+
+```bash
+npm ci                 # installs the versions pinned in package-lock.json
+npm run deploy         # = npm run build, then deploy.zip in the repo root
+```
+
+`next.config.js` sets `output: "standalone"`, so `next build` also writes a
+self-contained `.next/standalone/`. The `postbuild` step copies `public/` and
+`.next/static/` into it, and `deploy:zip` packs the result:
+
+| Entry | Why it ships |
+| --- | --- |
+| `server.js` | Passenger startup file ([why it exists](#why-serverjs-exists)) |
+| `.next/` | the prebuilt standalone output, incl. `.next/static` |
+| `public/` | static assets |
+| `package.json`, `package-lock.json` | the server's `npm install`; the lock keeps the host on the exact `next@14.2.35` the build used |
+| `prisma/` | the `postinstall` hook runs `prisma generate`, and `npm run db:deploy` applies these migrations |
+| `src/scripts/*.js` | `create:superadmin`, `reset:password` and `doctor`, plus the `.env` loader they share |
+
+`node_modules/` and `.env` are deliberately **not** in the archive: CloudLinux
+requires `node_modules` to be a symlink into the virtualenv, and the production
+`.env` on the server must survive the upload.
+
+**On the server:**
+
+```bash
+cd ~/factor
+source /home/cpaneluser/nodevenv/factor/20/bin/activate
+
+unzip -o deploy.zip                      # server.js, .next/, prisma/, ...
+npm install                              # into the virtualenv; runs prisma generate
+npm run db:deploy                        # only when prisma/migrations/ changed
+mkdir -p tmp && touch tmp/restart.txt    # Passenger picks up the new build
+```
+
+Then check `https://example.com/login` returns `200` and not `503`. If a page
+comes up blank or the login form does nothing, run `npm run doctor` on the server
+first: it reports whether the running app has its environment, the build, the
+Prisma client and the database ([login page goes blank](#the-login-page-goes-blank-when-you-submit-the-form)).
+
+The host never runs `next build` — the archive already holds the compiled output.
+That is what avoids the `pthread_create` abort and the "the build machine must
+match the host" problem described under
+[Troubleshooting](#pthread_create-resource-temporarily-unavailable-during-npm-run-build).
+`unzip -o` overwrites files but never deletes the ones a previous release left
+behind; add `rm -rf .next` before it if you want the directory to be pristine.
 
 ---
 
@@ -16,10 +71,10 @@ that do not exist in a local setup:
 
 | Requirement | Notes |
 | --- | --- |
-| cPanel with **Setup Node.js App** (Passenger) | Almost every cPanel host has it. If the icon is missing, ask support to enable "Node.js Selector", or use the [PM2 alternative](#appendix-b-pm2-instead-of-passenger). |
+| cPanel with **Setup Node.js App** (Passenger) | Almost every cPanel host has it. If the icon is missing, ask support to enable "Node.js Selector", or use the [PM2 alternative](#appendix-b--pm2-instead-of-passenger). |
 | Node.js **18.17 or newer** | Pick 18/20/22 in the Node.js Selector. Next.js 14 refuses to build on older versions. |
 | A **PostgreSQL** database | See [step 2](#2-create-the-database). PostgreSQL, not MySQL — the schema uses enums and `JSONB`. |
-| Terminal / SSH access | `npm install`, `prisma migrate deploy` and `npm run build` cannot be done through the File Manager. If your plan has no terminal, see [Appendix A](#appendix-a-no-terminal-access). |
+| Terminal / SSH access | `npm install`, `prisma migrate deploy` and `npm run build` cannot be done through the File Manager. If your plan has no terminal, see [Appendix A](#appendix-a--no-terminal-access). |
 | Access to `registry.npmjs.org` **and** `binaries.prisma.sh` | The engines Prisma needs are downloaded from `binaries.prisma.sh`, not from the npm registry. Hosts that block it need [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash). |
 | An SSL certificate (AutoSSL is fine) | Session cookies are `Secure` in production. |
 
@@ -42,7 +97,7 @@ postgresql://cpaneluser_factordbuser:PASSWORD@localhost:5432/cpaneluser_factordb
 ```
 
 If the host has no PostgreSQL but does have MySQL, the schema must be ported
-first — see [Appendix C](#appendix-c-mysql-instead-of-postgresql).
+first — see [Appendix C](#appendix-c--mysql-instead-of-postgresql).
 
 ### Option B — managed PostgreSQL outside cPanel
 
@@ -61,7 +116,7 @@ cPanel → **Setup Node.js App** → **Create Application**:
 | Application mode | **Production** |
 | Application root | `factor` — keep it **outside** `public_html`, i.e. `/home/cpaneluser/factor` |
 | Application URL | your domain, e.g. `example.com` (or `example.com/factor` for a sub-path) |
-| Application startup file | `app.js` |
+| Application startup file | `server.js` |
 
 cPanel then creates the virtualenv (its path is shown in the app list, e.g.
 `/home/cpaneluser/nodevenv/factor/20/bin/node`) and writes the Passenger
@@ -116,7 +171,36 @@ Only add `SESSION_COOKIE_SECURE="false"` if the site is **not** on HTTPS yet —
 otherwise login will bounce back to `/login` forever. See
 [Troubleshooting](#troubleshooting).
 
+Whichever way you set things up, **also create `.env` if you use the cPanel UI**.
+The two are not interchangeable for commands you type in a shell:
+
+* Variables from the cPanel UI are injected into the Passenger process, so only
+  the running app sees them — an SSH session does not. A command that works in
+  the app can therefore still fail with
+  `Environment variable not found: DATABASE_URL`.
+* The Prisma CLI reads `.env` from the project, so run `db:deploy` / `db:status`
+  from the application root.
+* Prisma **Client** resolves its `.env` next to the generated client, which on
+  this stack sits inside the virtualenv
+  (`~/nodevenv/<app>/<version>/lib/node_modules/.prisma/client/../../../.env`).
+  That path is not the one you would guess, so `create:superadmin`,
+  `reset:password` and `doctor` load the app-root `.env` and `.env.local`
+  themselves (`src/scripts/load-env.js`). Values you pass on the command line, or
+  set in the cPanel UI, still win over the file.
+* The app reads that *same* file: the Next server loads `.env` from the
+  application root when it boots, so one file configures both the app and your
+  shell. A process keeps the values it started with, so restart the app after
+  editing it (`touch tmp/restart.txt`).
+
+`npm run doctor` prints what both of them resolve to — which files were read, and
+whether each variable is set — without printing any secret.
+
 ## 6. Install dependencies and build
+
+You can skip the `npm run build` below. The normal flow ships an already-built
+`.next/` inside `deploy.zip`, so the host only has to run `npm install` and never
+builds — see [Deploy in one pass](#deploy-in-one-pass-the-normal-case). Continue
+here only if you cannot build locally and must compile on the host.
 
 In cPanel → Terminal (or over SSH):
 
@@ -197,46 +281,246 @@ a **Restart** button next to the app in Setup Node.js App.
 
 Verification checklist:
 
-1. `curl -I https://example.com/login` → `200 OK` and an `x-powered-by: Next.js`
+1. `npm run doctor` reports no `FAIL` lines: it checks the environment the app
+   actually runs with, the shipped build, the Prisma client and the database.
+2. `curl -I https://example.com/login` → `200 OK` and an `x-powered-by: Next.js`
    style response (not `503`).
-2. Open `https://example.com/login`, sign in with the superadmin account. A
-   successful login lands on the invoice list.
-3. cPanel → Setup Node.js App shows the app as running; startup errors appear in
+3. Open `https://example.com/login` and sign in with the superadmin account. A
+   superadmin is not attached to a company, so the dashboard layout redirects
+   them straight to the admin panel at `https://example.com/admin` — see
+   [Using the admin panel](#9-using-the-admin-panel-admin).
+4. cPanel → Setup Node.js App shows the app as running; startup errors appear in
    the log file listed there (`~/logs/...` or `stderr.log` in the app root).
 
+## 9. Using the admin panel (`/admin`)
+
+Sign in at `/login` with the email/password you passed to
+`npm run create:superadmin`. A superadmin belongs to no company, so the
+dashboard layout sees `role: "superadmin"` and redirects straight to
+`https://example.com/admin` — that page, plus `/account`, is all the account can
+reach. Its sidebar is labelled **پنل مدیر سامانه** and lists only
+*شرکت‌ها و حساب‌ها*.
+
+From `/admin` you can:
+
+* **Create a company** — its name plus the first company user, whose
+  email/password you type here. This is how every tenant account is born; the
+  panel creates companies, it does not issue invoices itself.
+* **Activate / deactivate** a company (`فعال` / `غیرفعال`). While a company is
+  inactive, `getAuthContext()` returns `null` for its users, so they are bounced
+  to `/login` until you switch it back on.
+* **Open a company** (`/admin/companies/<id>`) to list its users and add more of
+  them, as either a company user or another superadmin.
+
+The whole panel is gated by `requireSuperadmin()` (`src/lib/guards.ts`) inside
+`src/server/actions/admin.ts`, and by the redirect in
+`src/app/(admin)/layout.tsx` — a company user who types `/admin` is returned to
+`/`. The same operations are reachable from scripts via `POST /api/admin` with
+`{"action":"list_companies" | "create_company" | "set_company_active" |
+"invite_user", …}` and a valid session cookie.
+
+### Managing the superadmin password
+
+| Situation | What to do |
+| --- | --- |
+| Signed in, want a new password | sidebar → *حساب کاربری* (`/account`), minimum 8 characters |
+| Forgot it, shell available | `npm run reset:password -- you@example.com "new-password"` |
+| Forgot it, no shell | `/login` → *رمز عبور خود را فراموش کرده‌اید؟* → `/account?mode=recover` |
+| Locked out of everything | `npm run create:superadmin -- you@example.com "new-password"` |
+
+The two shell commands run from `~/factor`, with the virtualenv active
+(`source /home/cpaneluser/nodevenv/factor/20/bin/activate`). The `--` is what
+makes npm forward the email and password to the script; the web forms enforce the
+8-character minimum themselves, the CLI scripts hash whatever you give them with
+bcrypt (cost 12, same as `src/lib/password.ts`).
+
+`create:superadmin` is an upsert: it replaces the password *and* forces
+`role: "superadmin"`, so it also re-promotes an account whose role was changed by
+mistake. `reset:password` never touches `role` or `companyId` — it only rewrites
+the hash, which makes it the safe choice for a company user's password.
+
+The `?mode=recover` link is not emailed yet; it is written to the server log as
+`[recover] https://…/account?recovery_token=…` and expires after one hour — see
+[Password-recovery link](#password-recovery-link). Reading the log is what the
+`APP_URL` value is for.
+
 ## Updating an existing deployment
+
+Upload the new `deploy.zip` to `~/factor` first, then:
 
 ```bash
 cd ~/factor
 source /home/cpaneluser/nodevenv/factor/20/bin/activate
 
-git pull
-npm install --include=dev
-npm run db:deploy             # only when prisma/migrations changed
-npm run build
+unzip -o deploy.zip           # server.js, .next/, public/, prisma/, ...
+npm install                   # only when package.json/package-lock.json changed
+npm run db:deploy             # only when prisma/migrations/ changed
 mkdir -p tmp && touch tmp/restart.txt
 ```
 
-The build can be done while the old version is serving traffic; Passenger only
-picks up the new build after the restart, so the downtime is one restart.
+Because the build is made on your machine, the archive already contains the
+finished `.next/`. Passenger keeps serving the old build until the restart, so
+the downtime is that single restart.
 
 If `prisma/schema.prisma` changed **and** the host cannot reach
 `binaries.prisma.sh`, re-create and re-upload the offline bundle
-(`npx prisma generate && npm run prisma:offline-bundle`, then `tar -xzf` on the
-server — see [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash)).
+(`npm run prisma:generate && npm run prisma:offline-bundle`, then `tar -xzf` on
+the server — see [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash)).
 The bundle uploaded earlier contains the old client.
 
 ## Troubleshooting
+
+### `Environment variable not found: DATABASE_URL` from a shell command
+
+Prisma aborts before it connects: the variable was not in the environment of that
+process. It is not a database problem, and it does not mean the value is wrong.
+
+The most common cause is that the values only exist in the cPanel UI. Those are
+injected into the Passenger process, so the app works while every command you
+type in SSH fails. Put them in a file as well
+([5. Configure the environment](#5-configure-the-environment)) — the archive does
+not ship `.env.example`, so write the file out directly:
+
+```bash
+cd ~/factor
+cat > .env <<'EOF'
+DATABASE_URL="postgresql://cpaneluser_dbuser:PASSWORD@localhost:5432/cpaneluser_factordb?schema=public&connection_limit=5&pool_timeout=20"
+SESSION_SECRET="paste-a-long-random-string"
+APP_URL="https://example.com"
+EOF
+chmod 600 .env
+```
+
+Every command in this document starts from a fresh shell, so load the file into
+it before running anything else:
+
+```bash
+set -a && source .env && set +a
+```
+
+That also covers an older copy of the scripts, which relied on Prisma finding the
+file by itself.
+
+Or hand the value to one command, without creating anything:
+
+```bash
+DATABASE_URL="postgresql://cpaneluser_dbuser:pass@localhost:5432/cpaneluser_factordb" \
+  npm run db:deploy
+```
+
+`create:superadmin` and `reset:password` read the app-root `.env` and `.env.local`
+themselves, and an exported or inline variable always wins over the file. To see
+which files were read:
+
+```bash
+node -e "console.log(require('./src/scripts/load-env').files)"
+```
+
+### The login page goes blank when you submit the form
+
+No message, no error, an empty page — that is what a Server Action that *throws*
+looks like in a production build. The action is answered with an error, and React
+has no boundary to hand it to, so the tree under the root layout is unmounted.
+`src/app/error.tsx` now renders the failure instead (with its digest, which
+matches an entry in the app log), and the auth actions turn the usual causes into
+a Persian message on the form — but the cause itself still has to be fixed on the
+host.
+
+Run the check first; it reports what the *running* process sees:
+
+```bash
+cd ~/factor
+source /home/cpaneluser/nodevenv/factor/20/bin/activate
+npm run doctor
+```
+
+Each `FAIL` line is a separate cause:
+
+* `DATABASE_URL` / `SESSION_SECRET` **not set** → the app process has no
+  environment. The values in the cPanel UI are injected into Passenger when it
+  starts, so adding them there does nothing to the app already running. Create
+  the app-root `.env` ([5. Configure the environment](#5-configure-the-environment))
+  **and** restart (`touch tmp/restart.txt`).
+* `connection` fails with `Can't reach database server` / `Authentication failed`
+  → `DATABASE_URL` is wrong, or PostgreSQL is not running. The check runs the same
+  `select 1` the app would.
+* `migrations` or `tables` **FAIL** → `npm run db:deploy` was never run (or ran
+  against another database), so the login query has no table to read. Until the
+  schema exists no account tooling works either.
+* `generated client` / `query engines` **FAIL** → `npm install` did not complete
+  its `postinstall` (`prisma generate`); see
+  [Appendix D](#appendix-d--offline-install-no-access-to-binariesprismash).
+
+If `/login` is empty *before* you submit — no form at all — it is not the action.
+`curl -s https://example.com/login | wc -c` tells the two apart: a healthy page is
+tens of kilobytes; an empty or a few hundred bytes means the request itself failed
+(check the app log, and the sections above).
+
+### The form submits, you land back on `/login`, and no error is shown
+
+That is a *successful* action: the password was accepted and a session cookie was
+issued — but the browser did not keep it. In production the session cookie is
+marked `Secure` ([session.ts](src/lib/session.ts)), and a browser silently
+discards a `Secure` cookie that arrives over `http://`. Nothing in the response
+says so, and the redirect to `/` is then answered by the guard with a redirect
+back to `/login`.
+
+Open the site over `https://` and it works. `http://example.com` cannot hold a
+session at all, even while the page renders and every request returns 200.
+
+Confirm it in the browser in ten seconds: submit the form, open DevTools →
+Network → the `POST /login` entry → the response must carry
+`Set-Cookie: factor_session=…; Secure`. A `Secure` cookie on a page you opened
+over `http://` is the whole problem.
+
+`npm run doctor` reports the same thing as a `FAIL` when the cookie is Secure
+while `APP_URL` is `http://`, and the app logs a warning to `stderr.log` the
+first time it hands out a cookie over plain HTTP.
+
+To unblock a site that has no working certificate yet:
+
+```bash
+cd ~/factor
+grep -q SESSION_COOKIE_SECURE .env || echo 'SESSION_COOKIE_SECURE="false"' >> .env
+touch tmp/restart.txt
+```
+
+Remove that line once the site is on HTTPS: unset, cookies are `Secure` in
+production automatically. The usual reason a certificate is missing or ignored
+is that it has **expired** — check that from outside the server:
+
+```bash
+curl -sI https://example.com/login | head -1        # want HTTP/1.1 200 OK
+
+# Which certificate is served, for which name, and is it still valid?
+openssl s_client -connect example.com:443 -servername example.com </dev/null 2>/dev/null \
+  | grep -E "subject=|NotAfter|Verify return code"
+```
+
+Two shapes of broken HTTPS both leave the site HTTP-only, so read both lines: `Verify
+return code: 10 (certificate has expired)` means it expired, and a `subject=` that
+names **another** host means no certificate is installed for this domain at all —
+cPanel then serves its own `cpanel.<server>` certificate, which every browser rejects
+as a name mismatch. In that case AutoSSL was never issued: run it from the domain's
+own row in cPanel → **SSL/TLS Status** (not the account-level one), after checking
+that the domain's DNS A record points at this server. Do not paper over it by telling
+people to click through the warning: the address they then use still determines
+whether a session can be kept, and any `http://` link re-enters the broken case.
+
+cPanel → **SSL/TLS Status** → **Run AutoSSL** renews it. Until then, anyone on
+`http://` — or clicking through the browser's certificate warning — cannot stay
+signed in.
 
 ### 503 Service Unavailable right after setup
 
 Passenger could not start the process. Useful checks:
 
-* Application startup file must be `app.js` (not `server.js`, not `index.js`).
+* Application startup file must be `server.js` (not `index.js`, and not the
+  `.next/standalone/server.js` Next generates).
 * Run it by hand to see the real error:
-  `cd ~/factor && source /home/cpaneluser/nodevenv/factor/20/bin/activate && node app.js`
-  It must print `[app] Next.js ready on socket ...`.
-* `[app] failed to start Next.js: Could not find a production build` → `npm run build` was not run.
+  `cd ~/factor && source /home/cpaneluser/nodevenv/factor/20/bin/activate && node server.js`
+  It must print `[server] Next.js ready on socket ...`.
+* `[server] failed to start Next.js: Could not find a production build` → `npm run build` was not run.
 * Add `PassengerFriendlyErrorPages on` to the document root `.htaccess`
   temporarily to see startup errors in the browser; remove it afterwards.
 
@@ -364,10 +648,10 @@ another major version.
 
 ### Login redirects back to /login in a loop
 
-The session cookie was dropped by the browser. This happens when the cookie is
-`Secure` but the page is served over plain HTTP. Either enable AutoSSL
-(recommended), or set `SESSION_COOKIE_SECURE="false"` while the certificate is
-missing.
+The session cookie was dropped by the browser — a `Secure` cookie on a page served
+over plain HTTP. See
+[The form submits, you land back on `/login`, and no error is shown](#the-form-submits-you-land-back-on-login-and-no-error-is-shown)
+for the two-minute check and both fixes.
 
 ### `npm ERR!` / build fails on missing typescript
 
@@ -420,7 +704,7 @@ tar -czf factor-release.tgz .next
 Upload `factor-release.tgz` into `~/factor` and extract just the build output —
 `node_modules` must stay the virtualenv symlink
 (`tar -xzf factor-release.tgz -C ~/factor .next`). See
-[Appendix A](#appendix-a-no-terminal-access) and
+[Appendix A](#appendix-a--no-terminal-access) and
 [Path 3 in Appendix D](#path-3--the-npm-registry-is-blocked-as-well).
 
 > The unrelated `You are using a non-standard "NODE_ENV" value` warning means the
@@ -464,23 +748,36 @@ reload a running Passenger process.
 TODO); they use `APP_URL`, so set it to the public HTTPS URL or the link will be
 unusable. Reading them requires the app log (see above).
 
-## Why `app.js` exists
+## Why `server.js` exists
 
 cPanel serves Node apps through Phusion Passenger. Passenger starts the process
 and passes the listening socket in `PORT`, usually as a **filesystem path**
 (`/home/user/tmp/passenger-xxxx/socket`) rather than a port number. Next's stock
-`next start` and `output: "standalone"` servers both do
+`next start` and its generated `output: "standalone"` server both do
 `parseInt(process.env.PORT, 10) || 3000`, so they would listen on TCP 3000 where
 Passenger never looks, and the site would return 503 while the app looked healthy
 in the log.
 
-`app.js` avoids that by starting Next's own request handler
+`server.js` avoids that by starting Next's own request handler
 (`next({ dev: false })` + `getRequestHandler`) and listening on Passenger's
 socket; if `PORT` is numeric it listens on `0.0.0.0:$PORT` instead, so
-`npm run serve` also works on a plain VPS or inside a container. Because the
-entry point is a custom server, `next.config.js` deliberately does **not** set
-`output: "standalone"` — the full `node_modules` (including the Prisma engines)
-is required on the server.
+`npm run serve` also works on a plain VPS or inside a container.
+
+`next.config.js` sets `output: "standalone"`, so `next build` additionally emits
+a self-contained `.next/standalone/` (its own minimal `node_modules` plus a
+`server.js`) that can be built off the host and shipped as a release. On
+Passenger our root `server.js` is still the entry point — the `server.js` Next
+generates parses `PORT` with `parseInt()` and would miss Passenger's socket.
+
+Because our `server.js` is a *custom* server, it is not handed the resolved
+config the way Next's generated one is. It therefore reads that config back from
+`.next/required-server-files.json` and exports it as
+`__NEXT_PRIVATE_STANDALONE_CONFIG` before `require("next")`. Without that step a
+custom server cannot start from a standalone bundle at all — the traced
+`node_modules` has no `webpack/bundle5`, so `loadConfig()` aborts with
+`Cannot find module './bundle5'` — and `experimental.serverActions.bodySizeLimit`
+would silently fall back to 1 MB. See the comment block at the top of
+`server.js`.
 
 ## Hardening checklist
 
@@ -519,7 +816,7 @@ Selector and run the built app as a plain process:
 
 ```bash
 npm ci --include=dev && npm run build
-PORT=3000 NODE_ENV=production pm2 start app.js --name factor
+PORT=3000 NODE_ENV=production pm2 start server.js --name factor
 pm2 save
 ```
 
@@ -856,7 +1153,7 @@ The first `tar` writes the packages next to the symlink's target (a plain
 Selector); the second one only unpacks the build output.
 
 Keep the code itself in sync with `git pull` (or upload `src/`, `prisma/`,
-`package.json`, `app.js`, `next.config.js`) — and rebuild + re-upload `.next`
+`package.json`, `server.js`, `next.config.js`) — and rebuild + re-upload `.next`
 whenever any of it changes, because the server cannot compile. Copying the folder
 file by file over FTP is not enough: `node_modules` contains symlinked `bin/`
 entries that only survive a tar/zip round trip.

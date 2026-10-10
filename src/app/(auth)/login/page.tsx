@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { loginAction } from "../../../server/actions/auth";
 
@@ -14,6 +15,7 @@ function SubmitButton() {
 
 export default function LoginPage() {
   const [state, formAction] = useFormState(loginAction, undefined);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="card card-pad auth-card">
@@ -27,11 +29,46 @@ export default function LoginPage() {
       <form action={formAction}>
         <div className="field">
           <label htmlFor="email">ایمیل</label>
-          <input id="email" name="email" type="email" required autoComplete="username" />
+          {/* Both credentials are Latin text, so they are laid out
+              left-to-right inside the RTL page: the address and the password
+              read in the order they are typed instead of being reordered. */}
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="username"
+            dir="ltr"
+            spellCheck={false}
+            autoCapitalize="none"
+          />
         </div>
         <div className="field">
           <label htmlFor="password">رمز عبور</label>
-          <input id="password" name="password" type="password" required autoComplete="current-password" />
+          <div className="input-inline">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              required
+              autoComplete="current-password"
+              dir="ltr"
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            {/* type="button" is required here: the default is "submit", which
+                would try to sign in when the visitor only wanted to peek. */}
+            <button
+              type="button"
+              className="input-toggle"
+              onClick={() => setShowPassword((shown) => !shown)}
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "پنهان کردن رمز عبور" : "نمایش رمز عبور"}
+              title={showPassword ? "پنهان کردن رمز عبور" : "نمایش رمز عبور"}
+            >
+              {showPassword ? "پنهان" : "نمایش"}
+            </button>
+          </div>
         </div>
         <SubmitButton />
       </form>

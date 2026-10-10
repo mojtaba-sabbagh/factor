@@ -8,13 +8,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "serve": "node app.js",
+    "postbuild": "npm run copy-static",
+    "copy-static": "node src/scripts/copy-static.js",
+    "deploy": "npm run build && npm run deploy:zip",
+    "deploy:zip": "node src/scripts/create-deploy-zip.js",
+    "start": "node server.js",
+    "serve": "node server.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:offline-bundle": "node src/scripts/prisma-offline-bundle.js",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
+    "doctor": "node src/scripts/doctor.js",
     "create:superadmin": "node src/scripts/create-superadmin.js",
     "reset:password": "node src/scripts/reset-password.js",
     "postinstall": "prisma generate"
@@ -30,8 +35,8 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
-    "@types/react": "^18.3.0",
-    "typescript": "^5.5.4"
+    "@types/node": "20.19.43",
+    "@types/react": "18.3.31",
+    "typescript": "5.9.3"
   }
 }

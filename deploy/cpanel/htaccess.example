@@ -15,7 +15,7 @@ PassengerAppRoot "/home/USER/factor"
 PassengerBaseURI "/"
 PassengerNodejs "/home/USER/nodevenv/factor/20/bin/node"
 PassengerAppType node
-PassengerStartupFile app.js
+PassengerStartupFile server.js
 PassengerFriendlyErrorPages off
 
 # ---------------------------------------------------------------------------

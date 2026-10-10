@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
 const SESSION_COOKIE = "factor_session";
@@ -6,14 +6,38 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days, rolling
 const RECOVERY_TTL_SECONDS = 60 * 60; // 1 hour
 
 // Secure cookies are the right default in production, but a host that still
-// serves the app over plain HTTP (no SSL certificate yet) would make the
-// browser silently drop the session cookie, turning every login into a
-// redirect loop. SESSION_COOKIE_SECURE=false is the escape hatch for that
-// case; leave it unset once the site is on HTTPS.
+// serves the app over plain HTTP (no SSL certificate yet) makes the browser
+// silently drop the session cookie: the sign-in succeeds, redirects to "/", and
+// the guard sends the visitor straight back to /login. SESSION_COOKIE_SECURE=false
+// is the escape hatch for that case; leave it unset once the site is on HTTPS.
+// Nothing in the response says any of this, so say it in the app log instead —
+// once per process, and only when the request (or APP_URL) is plain HTTP.
+let warnedAboutPlainHttp = false;
+function warnIfCookiesCannotBeStored() {
+  if (warnedAboutPlainHttp) return;
+  let proto: string | null = null;
+  try {
+    proto = headers().get("x-forwarded-proto");
+  } catch {
+    // No request scope (a script importing this module): fall back to APP_URL.
+  }
+  const appUrl = process.env.APP_URL || "";
+  if (proto === "http" || (!proto && appUrl.startsWith("http://"))) {
+    warnedAboutPlainHttp = true;
+    console.warn(
+      "[session] the session cookie is Secure but the site is served over plain HTTP, so browsers " +
+        "discard the cookie and every login bounces back to /login. Serve the site over HTTPS, or put " +
+        'SESSION_COOKIE_SECURE="false" in the app-root .env and restart (DEPLOYMENT.md, Troubleshooting).',
+    );
+  }
+}
+
 function cookieSecure() {
   const override = process.env.SESSION_COOKIE_SECURE;
   if (override) return override === "true";
-  return process.env.NODE_ENV === "production";
+  const secure = process.env.NODE_ENV === "production";
+  if (secure) warnIfCookiesCannotBeStored();
+  return secure;
 }
 
 function secretKey() {

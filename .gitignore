@@ -6,6 +6,9 @@ node_modules/
 # (npm run prisma:offline-bundle — see DEPLOYMENT.md, Appendix D)
 prisma-offline-client.tgz
 
+# Deployment archive produced by `npm run deploy:zip`
+/deploy.zip
+
 # Local configuration and credentials
 .env
 .env.local

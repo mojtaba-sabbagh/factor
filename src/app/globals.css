@@ -70,6 +70,29 @@ button, input, select, textarea {
 .field label { font-size: 13px; color: var(--muted); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 
+/* An input with a button fused to its edge, like the date picker's 📅
+   (.jdp-toggle). The button is a flex sibling placed on the inline-end side,
+   so it follows the writing direction: left in this RTL app. Logical corners
+   keep the merged edge square and the outer edge rounded. */
+.input-inline { display: flex; }
+.input-inline input { flex: 1; min-width: 0; border-start-end-radius: 0; border-end-end-radius: 0; }
+.input-inline .input-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-inline-start: none;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  background: #fff;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+.input-inline .input-toggle:hover { background: var(--bg); }
+
 /* Tables */
 .table, .items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th, .items-table th { background: var(--bg); text-align: right; padding: 8px; border-bottom: 1px solid var(--border); }

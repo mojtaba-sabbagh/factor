@@ -1,8 +1,17 @@
 // Usage: node scripts/reset-password.js someone@example.com "newPassword"
 // Unlike create-superadmin.js, this never touches role or companyId — it only
 // resets the password for an existing user, whatever kind of account they have.
+//
+// load-env first: it reads the application root's .env / .env.local, which is
+// where cPanel deployments keep DATABASE_URL (Prisma looks next to its own
+// generated client, i.e. inside the virtualenv — see src/scripts/load-env.js).
+const { requireDatabaseUrl } = require("./load-env");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+
+requireDatabaseUrl(
+  'DATABASE_URL="postgresql://..." npm run reset:password -- someone@example.com "a-new-password"'
+);
 
 const db = new PrismaClient();
 
